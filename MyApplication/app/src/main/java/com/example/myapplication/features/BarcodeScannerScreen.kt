@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -30,6 +31,7 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import java.util.concurrent.Executors
+import java.util.Locale
 
 @SuppressLint("UnsafeOptInUsageError")
 @Composable
@@ -40,10 +42,30 @@ fun BarcodeScannerScreen() {
     var barcodeResult by remember { mutableStateOf<String?>(null) }
     var productInfo by remember { mutableStateOf("스캔된 제품 정보를 기다리는 중...") }
     var isScanning by remember { mutableStateOf(true) } // 스캔 상태
+    var tts by remember { mutableStateOf<TextToSpeech?>(null) }
     val apiKey = "7798fd698f1f456a9988"
 
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+
+    // TTS 초기화
+    LaunchedEffect(Unit) {
+        tts = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.language = Locale.KOREAN
+                Log.d("TTS", "TTS 초기화 성공")
+            } else {
+                Log.e("TTS", "TTS 초기화 실패")
+            }
+        }
+    }
+
+    // 컴포즈가 종료될 때 TTS 리소스 해제
+    DisposableEffect(Unit) {
+        onDispose {
+            tts?.shutdown()
+        }
+    }
 
     // 진동 함수
     fun vibrateOnce(ctx: Context) {
@@ -65,12 +87,23 @@ fun BarcodeScannerScreen() {
         }
     }
 
+    // TTS로 텍스트 읽기
+    fun speakText(text: String) {
+        tts?.let { textToSpeech ->
+            if (textToSpeech.isSpeaking) {
+                textToSpeech.stop()
+            }
+            textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+        }
+    }
+
     // 바코드 인식 후 API 호출
     LaunchedEffect(barcodeResult) {
         barcodeResult?.let { code ->
             productInfo = "정보 불러오는 중..."
             isScanning = false // 인식 멈춤
             vibrateOnce(context)  // 진동 울림
+            speakText("바코드를 인식했습니다. 제품 정보를 불러오는 중입니다.")
 
             RetrofitClient.instance.getProductByBarcode(
                 keyId = apiKey,
@@ -88,23 +121,38 @@ fun BarcodeScannerScreen() {
                         val rows = body?.rows
                         if (!rows.isNullOrEmpty()) {
                             val item = rows[0]
+                            val productName = item.productName ?: "정보 없음"
+                            val expiration = item.expiration ?: "정보 없음"
+                            val category = item.productCategory ?: "정보 없음"
+                            val manufacturer = item.manufacturer ?: "정보 없음"
+
                             productInfo = """
                                 바코드: $barcodeResult
-                                상품명: ${item.productName ?: "정보 없음"}
-                                유통기한: ${item.expiration ?: "정보 없음"}
-                                분류: ${item.productCategory ?: "정보 없음"}
-                                제조사: ${item.manufacturer ?: "정보 없음"}
+                                상품명: $productName
+                                유통기한: $expiration
+                                분류: $category
+                                제조사: $manufacturer
                             """.trimIndent()
+
+                            // TTS로 제품 정보 읽기
+                            val ttsText = "제품 정보를 찾았습니다. 상품명은 $productName 입니다. " +
+                                    "유통기한은 $expiration 이고, " +
+                                    "분류는 $category 입니다. " +
+                                    "제조사는 $manufacturer 입니다."
+                            speakText(ttsText)
                         } else {
                             productInfo = "해당 바코드의 제품 정보를 찾을 수 없습니다."
+                            speakText("해당 바코드의 제품 정보를 찾을 수 없습니다.")
                         }
                     } else {
                         productInfo = "API 호출 실패: ${response.code()}"
+                        speakText("제품 정보를 불러오는데 실패했습니다.")
                     }
                 }
 
                 override fun onFailure(call: Call<C005Response>, t: Throwable) {
                     productInfo = "API 호출 오류: ${t.localizedMessage}"
+                    speakText("네트워크 오류가 발생했습니다.")
                 }
             })
         }
@@ -116,11 +164,12 @@ fun BarcodeScannerScreen() {
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectVerticalDragGestures { _, dragAmount ->
-                    // 아래로 드래그하면 다시 스캔 가능
-                    if (dragAmount > 30f) {
+                    // 위로 드래그하면 다시 스캔 가능
+                    if (dragAmount > -30f) {
                         isScanning = true
                         barcodeResult = null
                         productInfo = "스캔된 제품 정보를 기다리는 중..."
+                        speakText("다시 스캔을 시작합니다.")
                     }
                 }
             },

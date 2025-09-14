@@ -40,6 +40,7 @@ android {
 }
 
 dependencies {
+    implementation("com.google.mlkit:barcode-scanning:17.0.3")
     // 기본 Compose 및 Android 의존성
     implementation("androidx.compose.material3:material3:1.2.0")
     implementation("androidx.activity:activity-compose:1.8.0")
