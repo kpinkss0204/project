@@ -10,28 +10,30 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.LifecycleOwner
+import com.example.myapplication.model.C005Response
+import com.example.myapplication.network.RetrofitClient
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import com.example.myapplication.network.RetrofitClient
-import com.example.myapplication.model.C005Response
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import java.util.*
 import java.util.concurrent.Executors
-import java.util.Locale
 
 @SuppressLint("UnsafeOptInUsageError")
 @Composable
@@ -41,7 +43,7 @@ fun BarcodeScannerScreen() {
 
     var barcodeResult by remember { mutableStateOf<String?>(null) }
     var productInfo by remember { mutableStateOf("스캔된 제품 정보를 기다리는 중...") }
-    var isScanning by remember { mutableStateOf(true) } // 스캔 상태
+    var isScanning by remember { mutableStateOf(true) }
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
     val apiKey = "7798fd698f1f456a9988"
 
@@ -54,45 +56,32 @@ fun BarcodeScannerScreen() {
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.KOREAN
                 Log.d("TTS", "TTS 초기화 성공")
-            } else {
-                Log.e("TTS", "TTS 초기화 실패")
-            }
+            } else Log.e("TTS", "TTS 초기화 실패")
         }
     }
 
-    // 컴포즈가 종료될 때 TTS 리소스 해제
     DisposableEffect(Unit) {
-        onDispose {
-            tts?.shutdown()
-        }
+        onDispose { tts?.shutdown() }
     }
 
-    // 진동 함수
+    // 진동
     fun vibrateOnce(ctx: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager =
-                ctx.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            val vibratorManager = ctx.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             vibratorManager.defaultVibrator.vibrate(
                 VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE)
             )
         } else {
             val vibrator = ctx.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(
-                    VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE)
-                )
-            } else {
-                vibrator.vibrate(300)
-            }
+                vibrator.vibrate(VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else vibrator.vibrate(300)
         }
     }
 
-    // TTS로 텍스트 읽기
     fun speakText(text: String) {
         tts?.let { textToSpeech ->
-            if (textToSpeech.isSpeaking) {
-                textToSpeech.stop()
-            }
+            if (textToSpeech.isSpeaking) textToSpeech.stop()
             textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
         }
     }
@@ -101,8 +90,8 @@ fun BarcodeScannerScreen() {
     LaunchedEffect(barcodeResult) {
         barcodeResult?.let { code ->
             productInfo = "정보 불러오는 중..."
-            isScanning = false // 인식 멈춤
-            vibrateOnce(context)  // 진동 울림
+            isScanning = false
+            vibrateOnce(context)
             speakText("바코드를 인식했습니다. 제품 정보를 불러오는 중입니다.")
 
             RetrofitClient.instance.getProductByBarcode(
@@ -115,10 +104,7 @@ fun BarcodeScannerScreen() {
             ).enqueue(object : Callback<C005Response> {
                 override fun onResponse(call: Call<C005Response>, response: Response<C005Response>) {
                     if (response.isSuccessful) {
-                        val body = response.body()
-                        Log.d("API_RESPONSE", "응답 전체: $body")
-
-                        val rows = body?.rows
+                        val rows = response.body()?.rows
                         if (!rows.isNullOrEmpty()) {
                             val item = rows[0]
                             val productName = item.productName ?: "정보 없음"
@@ -134,25 +120,24 @@ fun BarcodeScannerScreen() {
                                 제조사: $manufacturer
                             """.trimIndent()
 
-                            // TTS로 제품 정보 읽기
                             val ttsText = "제품 정보를 찾았습니다. 상품명은 $productName 입니다. " +
-                                    "유통기한은 $expiration 이고, " +
-                                    "분류는 $category 입니다. " +
-                                    "제조사는 $manufacturer 입니다."
+                                    "유통기한은 $expiration 이고, 분류는 $category 입니다. " +
+                                    "제조사는 $manufacturer 입니다. " +
+                                    "다시 스캔하려면 화면을 아래로 스와이프하세요."
                             speakText(ttsText)
                         } else {
-                            productInfo = "해당 바코드의 제품 정보를 찾을 수 없습니다."
-                            speakText("해당 바코드의 제품 정보를 찾을 수 없습니다.")
+                            productInfo = "해당 바코드의 제품 정보를 찾을 수 없습니다. 다시 스캔하려면 화면을 아래로 스와이프하세요."
+                            speakText(productInfo)
                         }
                     } else {
-                        productInfo = "API 호출 실패: ${response.code()}"
-                        speakText("제품 정보를 불러오는데 실패했습니다.")
+                        productInfo = "API 호출 실패: ${response.code()}. 다시 스캔하려면 화면을 아래로 스와이프하세요."
+                        speakText("제품 정보를 불러오는데 실패했습니다. 다시 스캔하려면 화면을 아래로 스와이프하세요.")
                     }
                 }
 
                 override fun onFailure(call: Call<C005Response>, t: Throwable) {
-                    productInfo = "API 호출 오류: ${t.localizedMessage}"
-                    speakText("네트워크 오류가 발생했습니다.")
+                    productInfo = "API 호출 오류: ${t.localizedMessage}. 다시 스캔하려면 화면을 아래로 스와이프하세요."
+                    speakText("네트워크 오류가 발생했습니다. 다시 스캔하려면 화면을 아래로 스와이프하세요.")
                 }
             })
         }
@@ -164,8 +149,8 @@ fun BarcodeScannerScreen() {
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectVerticalDragGestures { _, dragAmount ->
-                    // 위로 드래그하면 다시 스캔 가능
-                    if (dragAmount > -30f) {
+                    // 아래로 드래그할 때만 재인식 (dragAmount가 양수이고 충분히 클 때)
+                    if (dragAmount > 100f) {
                         isScanning = true
                         barcodeResult = null
                         productInfo = "스캔된 제품 정보를 기다리는 중..."
@@ -178,11 +163,11 @@ fun BarcodeScannerScreen() {
             val cameraProvider = cameraProviderFuture.get()
             val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
 
-            val barcodeScannerOptions = BarcodeScannerOptions.Builder()
-                .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
-                .build()
-
-            val scanner = BarcodeScanning.getClient(barcodeScannerOptions)
+            val scanner = BarcodeScanning.getClient(
+                BarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
+                    .build()
+            )
 
             val analysisUseCase = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -199,12 +184,10 @@ fun BarcodeScannerScreen() {
                     val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
                     scanner.process(image)
                         .addOnSuccessListener { barcodes ->
-                            for (barcode in barcodes) {
-                                barcode.rawValue?.let { rawValue ->
-                                    if (barcodeResult != rawValue) {
-                                        barcodeResult = rawValue
-                                        Log.d("BarcodeScanner", "바코드 인식: $rawValue")
-                                    }
+                            barcodes.firstOrNull()?.rawValue?.let { rawValue ->
+                                if (barcodeResult != rawValue) {
+                                    barcodeResult = rawValue
+                                    Log.d("BarcodeScanner", "바코드 인식: $rawValue")
                                 }
                             }
                         }
@@ -223,13 +206,30 @@ fun BarcodeScannerScreen() {
         }
     )
 
+    // 제품 정보 카드로 표시
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(180.dp)
+            .height(220.dp)
             .padding(16.dp),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopCenter
     ) {
-        Text(text = productInfo, style = MaterialTheme.typography.titleMedium)
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                productInfo.split("\n").forEach { line ->
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                }
+            }
+        }
     }
 }
