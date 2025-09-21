@@ -45,6 +45,12 @@ fun BarcodeScannerScreen() {
     var productInfo by remember { mutableStateOf("스캔된 제품 정보를 기다리는 중...") }
     var isScanning by remember { mutableStateOf(true) }
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
+
+    // 🔹 바코드 2차 검증용 상태
+    var lastDetectedBarcode by remember { mutableStateOf<String?>(null) }
+    var detectionCount by remember { mutableStateOf(0) }
+    val detectionThreshold = 3   // 같은 값이 3번 이상 반복되면 확정
+
     val apiKey = "7798fd698f1f456a9988"
 
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
@@ -64,10 +70,11 @@ fun BarcodeScannerScreen() {
         onDispose { tts?.shutdown() }
     }
 
-    // 진동
+    // 진동 함수
     fun vibrateOnce(ctx: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager = ctx.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            val vibratorManager =
+                ctx.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             vibratorManager.defaultVibrator.vibrate(
                 VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE)
             )
@@ -102,7 +109,10 @@ fun BarcodeScannerScreen() {
                 endIdx = 1,
                 barcode = code
             ).enqueue(object : Callback<C005Response> {
-                override fun onResponse(call: Call<C005Response>, response: Response<C005Response>) {
+                override fun onResponse(
+                    call: Call<C005Response>,
+                    response: Response<C005Response>
+                ) {
                     if (response.isSuccessful) {
                         val rows = response.body()?.rows
                         if (!rows.isNullOrEmpty()) {
@@ -126,34 +136,38 @@ fun BarcodeScannerScreen() {
                                     "다시 스캔하려면 화면을 아래로 스와이프하세요."
                             speakText(ttsText)
                         } else {
-                            productInfo = "해당 바코드의 제품 정보를 찾을 수 없습니다. 다시 스캔하려면 화면을 아래로 스와이프하세요."
+                            productInfo =
+                                "해당 바코드의 제품 정보를 찾을 수 없습니다. 다시 스캔하려면 화면을 아래로 스와이프하세요."
                             speakText(productInfo)
                         }
                     } else {
-                        productInfo = "API 호출 실패: ${response.code()}. 다시 스캔하려면 화면을 아래로 스와이프하세요."
+                        productInfo =
+                            "API 호출 실패: ${response.code()}. 다시 스캔하려면 화면을 아래로 스와이프하세요."
                         speakText("제품 정보를 불러오는데 실패했습니다. 다시 스캔하려면 화면을 아래로 스와이프하세요.")
                     }
                 }
 
                 override fun onFailure(call: Call<C005Response>, t: Throwable) {
-                    productInfo = "API 호출 오류: ${t.localizedMessage}. 다시 스캔하려면 화면을 아래로 스와이프하세요."
+                    productInfo =
+                        "API 호출 오류: ${t.localizedMessage}. 다시 스캔하려면 화면을 아래로 스와이프하세요."
                     speakText("네트워크 오류가 발생했습니다. 다시 스캔하려면 화면을 아래로 스와이프하세요.")
                 }
             })
         }
     }
 
-    // 카메라 Preview
+    // 카메라 Preview + 바코드 인식
     AndroidView(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectVerticalDragGestures { _, dragAmount ->
-                    // 아래로 드래그할 때만 재인식 (dragAmount가 양수이고 충분히 클 때)
                     if (dragAmount > 100f) {
                         isScanning = true
                         barcodeResult = null
                         productInfo = "스캔된 제품 정보를 기다리는 중..."
+                        lastDetectedBarcode = null
+                        detectionCount = 0
                         speakText("다시 스캔을 시작합니다.")
                     }
                 }
@@ -161,7 +175,9 @@ fun BarcodeScannerScreen() {
         factory = { ctx ->
             val previewView = androidx.camera.view.PreviewView(ctx)
             val cameraProvider = cameraProviderFuture.get()
-            val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(previewView.surfaceProvider)
+            }
 
             val scanner = BarcodeScanning.getClient(
                 BarcodeScannerOptions.Builder()
@@ -181,17 +197,28 @@ fun BarcodeScannerScreen() {
 
                 val mediaImage = imageProxy.image
                 if (mediaImage != null) {
-                    val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+                    val image = InputImage.fromMediaImage(
+                        mediaImage,
+                        imageProxy.imageInfo.rotationDegrees
+                    )
                     scanner.process(image)
                         .addOnSuccessListener { barcodes ->
                             barcodes.firstOrNull()?.rawValue?.let { rawValue ->
-                                if (barcodeResult != rawValue) {
-                                    barcodeResult = rawValue
-                                    Log.d("BarcodeScanner", "바코드 인식: $rawValue")
+                                if (lastDetectedBarcode == rawValue) {
+                                    detectionCount++
+                                    if (detectionCount >= detectionThreshold && barcodeResult != rawValue) {
+                                        barcodeResult = rawValue
+                                        Log.d("BarcodeScanner", "✅ 최종 확정 바코드: $rawValue")
+                                    }
+                                } else {
+                                    lastDetectedBarcode = rawValue
+                                    detectionCount = 1
                                 }
                             }
                         }
-                        .addOnFailureListener { Log.e("BarcodeScanner", "바코드 인식 실패", it) }
+                        .addOnFailureListener {
+                            Log.e("BarcodeScanner", "바코드 인식 실패", it)
+                        }
                         .addOnCompleteListener { imageProxy.close() }
                 } else {
                     imageProxy.close()
@@ -200,13 +227,18 @@ fun BarcodeScannerScreen() {
 
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
             cameraProvider.unbindAll()
-            cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, analysisUseCase)
+            cameraProvider.bindToLifecycle(
+                lifecycleOwner,
+                cameraSelector,
+                preview,
+                analysisUseCase
+            )
 
             previewView
         }
     )
 
-    // 제품 정보 카드로 표시
+    // 제품 정보 카드 UI
     Box(
         modifier = Modifier
             .fillMaxWidth()
