@@ -15,7 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.core.content.ContextCompat
 import com.example.myapplication.features.BarcodeScannerScreen
-import com.example.myapplication.features.PillRecognizerScreen
+import com.example.myapplication.features.MoneyRecognizerScreen
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.google.accompanist.pager.HorizontalPager
 import com.google.accompanist.pager.rememberPagerState
@@ -66,9 +66,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppContent() {
     val pages: List<Pair<String, @Composable () -> Unit>> = listOf(
-        "알약 인식" to { PillRecognizerScreen() },
         "텍스트 읽기" to { TextReaderScreen() },
-        "화폐 인식" to { CurrencyRecognizerScreen() },
+        "화폐 인식" to { MoneyRecognizerScreen() }, // 이제 로컬 함수 사용
         "바코드 인식" to { BarcodeScannerScreen() }
     )
 
@@ -116,15 +115,5 @@ fun TextReaderScreen() {
         contentAlignment = Alignment.Center
     ) {
         Text("텍스트 읽기 기능 구현 중...")
-    }
-}
-
-@Composable
-fun CurrencyRecognizerScreen() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text("화폐 인식 기능 구현 중...")
     }
 }

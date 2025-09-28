@@ -40,6 +40,16 @@ android {
 }
 
 dependencies {
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
+    implementation("org.pytorch:pytorch_android_lite:1.12.2")
+    implementation("org.pytorch:pytorch_android_torchvision_lite:1.12.2")
+    // ONNX Runtime (AI 모델 실행용)
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.18.0")
+
+    // Core Android
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+
     // Compose
     implementation("androidx.compose.foundation:foundation:1.6.0")
     implementation("androidx.compose.foundation:foundation-layout:1.6.0")
@@ -48,9 +58,6 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.8.0")
     implementation("androidx.compose.ui:ui:1.6.0")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.0")
-
-    implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 
     // Accompanist Pager
     implementation("com.google.accompanist:accompanist-pager:0.30.1")
@@ -63,13 +70,10 @@ dependencies {
     implementation("androidx.camera:camera-view:1.3.1")
     implementation("androidx.camera:camera-extensions:1.3.1")
 
-    // ONNX Runtime (AI 모델 실행용)
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.3")
-
     // HTTP Client (API 호출용)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // ML Kit Barcode Scanning (중복 제거)
+    // ML Kit Barcode Scanning
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
     // Retrofit
@@ -78,4 +82,12 @@ dependencies {
 
     // 코루틴
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1")
+
+    // Test dependencies
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.6.0")
+    debugImplementation("androidx.compose.ui:ui-tooling:1.6.0")
+    debugImplementation("androidx.compose.ui:ui-test-manifest:1.6.0")
 }
