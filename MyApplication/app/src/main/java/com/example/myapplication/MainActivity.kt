@@ -1,5 +1,9 @@
 package com.example.myapplication
 
+import androidx.compose.ui.unit.dp
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
@@ -13,13 +17,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.example.myapplication.features.BarcodeScannerScreen
 import com.example.myapplication.features.MoneyRecognizerScreen
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.google.accompanist.pager.HorizontalPager
 import com.google.accompanist.pager.rememberPagerState
-import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
@@ -30,7 +35,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA)
-            != PackageManager.PERMISSION_GRANTED) {
+            != PackageManager.PERMISSION_GRANTED
+        ) {
             requestPermissions(arrayOf(android.Manifest.permission.CAMERA), CAMERA_PERMISSION_CODE)
         } else {
             setContent {
@@ -49,7 +55,8 @@ class MainActivity : ComponentActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == CAMERA_PERMISSION_CODE &&
             grantResults.isNotEmpty() &&
-            grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        ) {
             setContent {
                 MyApplicationTheme {
                     AppContent()
@@ -65,15 +72,30 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppContent() {
+    var p1Location by remember { mutableStateOf<Pair<Double, Double>?>(Pair(37.5665, 126.9780)) } // P1 위치
+    var inputKey by remember { mutableStateOf("") } // P2 입력 키
+    var p2ViewLocation by remember { mutableStateOf<Pair<Double, Double>?>(null) } // P2에서 보는 위치
+    var generatedKey by remember { mutableStateOf("") } // 생성된 난수 암호코드
+
     val pages: List<Pair<String, @Composable () -> Unit>> = listOf(
         "텍스트 읽기" to { TextReaderScreen() },
-        "화폐 인식" to { MoneyRecognizerScreen() }, // 이제 로컬 함수 사용
-        "바코드 인식" to { BarcodeScannerScreen() }
+        "화폐 인식" to { MoneyRecognizerScreen() },
+        "바코드 인식" to { BarcodeScannerScreen() },
+        "위치 공유/암호" to {
+            LocationSharingWithCodeScreen(
+                locationState = p1Location,
+                inputKeyState = inputKey,
+                onInputChange = { inputKey = it },
+                p2LocationState = p2ViewLocation,
+                onLocationConfirmed = { p2ViewLocation = it },
+                generatedKeyState = generatedKey,
+                onGenerateKey = { generatedKey = it }
+            )
+        }
     )
 
     val pagerState = rememberPagerState()
     var selectedPage by remember { mutableStateOf<Int?>(null) }
-    val scope = rememberCoroutineScope()
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -81,7 +103,6 @@ fun AppContent() {
             TopAppBar(title = { Text(pages[pagerState.currentPage].first) })
         }
     ) { paddingValues ->
-
         HorizontalPager(
             count = pages.size,
             state = pagerState,
@@ -115,5 +136,75 @@ fun TextReaderScreen() {
         contentAlignment = Alignment.Center
     ) {
         Text("텍스트 읽기 기능 구현 중...")
+    }
+}
+
+// =====================================
+// 위치 공유 + 난수 암호 생성 화면
+@Composable
+fun LocationSharingWithCodeScreen(
+    locationState: Pair<Double, Double>?,
+    inputKeyState: String,
+    onInputChange: (String) -> Unit,
+    p2LocationState: Pair<Double, Double>?,
+    onLocationConfirmed: (Pair<Double, Double>) -> Unit,
+    generatedKeyState: String,
+    onGenerateKey: (String) -> Unit
+) {
+    var inputKey by remember { mutableStateOf(inputKeyState) }
+    val location = locationState ?: Pair(37.5665, 126.9780)
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("위치 공유 및 암호코드 생성", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 🔑 난수 암호 생성 버튼
+        Button(onClick = {
+            val key = (1..10).map { Random.nextInt(0, 10) }.joinToString("")
+            onGenerateKey(key)
+        }) {
+            Text("난수 암호 생성")
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("생성된 암호코드: $generatedKeyState")
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(onClick = {
+            if (generatedKeyState.isNotEmpty()) {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("암호코드", generatedKeyState)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(context, "암호코드가 클립보드에 복사되었습니다.", Toast.LENGTH_SHORT).show()
+            }
+        }) {
+            Text("클립보드에 복사")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // P2 입력 키 확인
+        OutlinedTextField(
+            value = inputKey,
+            onValueChange = { inputKey = it; onInputChange(it) },
+            label = { Text("P2 암호 입력") }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(onClick = {
+            if (inputKey == generatedKeyState) {
+                onLocationConfirmed(location)
+            } else {
+                Toast.makeText(context, "암호가 일치하지 않습니다.", Toast.LENGTH_SHORT).show()
+            }
+        }) {
+            Text("위치 확인")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        p2LocationState?.let { loc ->
+            Text("P1 위치 확인: Lat ${loc.first}, Lon ${loc.second}")
+        }
     }
 }
