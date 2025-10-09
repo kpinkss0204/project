@@ -1,3 +1,4 @@
+// 파일 경로: app/src/main/java/com/example/myapplication/MainActivity.kt
 package com.example.myapplication
 
 import androidx.compose.ui.unit.dp
@@ -19,8 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import com.example.myapplication.features.BarcodeScannerScreen
-import com.example.myapplication.features.MoneyRecognizerScreen
+import com.example.myapplication.features.CameraScreen
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.google.accompanist.pager.HorizontalPager
 import com.google.accompanist.pager.rememberPagerState
@@ -40,9 +40,7 @@ class MainActivity : ComponentActivity() {
             requestPermissions(arrayOf(android.Manifest.permission.CAMERA), CAMERA_PERMISSION_CODE)
         } else {
             setContent {
-                MyApplicationTheme {
-                    AppContent()
-                }
+                MyApplicationTheme { AppContent() }
             }
         }
     }
@@ -58,9 +56,7 @@ class MainActivity : ComponentActivity() {
             grantResults[0] == PackageManager.PERMISSION_GRANTED
         ) {
             setContent {
-                MyApplicationTheme {
-                    AppContent()
-                }
+                MyApplicationTheme { AppContent() }
             }
         } else {
             Toast.makeText(this, "카메라 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
@@ -72,15 +68,14 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppContent() {
-    var p1Location by remember { mutableStateOf<Pair<Double, Double>?>(Pair(37.5665, 126.9780)) } // P1 위치
-    var inputKey by remember { mutableStateOf("") } // P2 입력 키
-    var p2ViewLocation by remember { mutableStateOf<Pair<Double, Double>?>(null) } // P2에서 보는 위치
-    var generatedKey by remember { mutableStateOf("") } // 생성된 난수 암호코드
+    var p1Location by remember { mutableStateOf<Pair<Double, Double>?>(Pair(37.5665, 126.9780)) }
+    var inputKey by remember { mutableStateOf("") }
+    var p2ViewLocation by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var generatedKey by remember { mutableStateOf("") }
 
     val pages: List<Pair<String, @Composable () -> Unit>> = listOf(
         "텍스트 읽기" to { TextReaderScreen() },
-        "화폐 인식" to { MoneyRecognizerScreen() },
-        "바코드 인식" to { BarcodeScannerScreen() },
+        "화폐/바코드 인식" to { CameraScreen() },
         "위치 공유/암호" to {
             LocationSharingWithCodeScreen(
                 locationState = p1Location,
@@ -111,13 +106,11 @@ fun AppContent() {
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     detectVerticalDragGestures { _, dragAmount ->
-                        if (dragAmount < -30f) {
-                            selectedPage = pagerState.currentPage
-                        }
+                        if (dragAmount < -30f) selectedPage = pagerState.currentPage
                     }
                 }
-        ) { page ->
-            pages[page].second()
+        ) { pageIndex ->
+            pages[pageIndex].second()
         }
 
         selectedPage?.let { index ->
@@ -156,14 +149,15 @@ fun LocationSharingWithCodeScreen(
     val context = LocalContext.current
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Text("위치 공유 및 암호코드 생성", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 🔑 난수 암호 생성 버튼
         Button(onClick = {
             val key = (1..10).map { Random.nextInt(0, 10) }.joinToString("")
             onGenerateKey(key)
@@ -186,7 +180,6 @@ fun LocationSharingWithCodeScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // P2 입력 키 확인
         OutlinedTextField(
             value = inputKey,
             onValueChange = { inputKey = it; onInputChange(it) },
