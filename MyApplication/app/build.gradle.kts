@@ -40,6 +40,7 @@ android {
 }
 
 dependencies {
+    implementation("com.kakao.maps.open:android:2.12.18")
     // Compose - 버전을 1.6.0으로 통일
     implementation("androidx.compose.ui:ui:1.6.0")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.0")
