@@ -1,7 +1,8 @@
 plugins {
-    alias(libs.plugins.android.application)
+    id("com.android.application")
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -40,7 +41,14 @@ android {
 }
 
 dependencies {
+    implementation("com.google.android.gms:play-services-location:21.1.0")
+    implementation("com.google.firebase:firebase-database-ktx:20.3.1")
+    implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
+    implementation("com.google.firebase:firebase-database")
+    implementation("com.google.firebase:firebase-analytics")
+
     implementation("com.kakao.maps.open:android:2.12.18")
+
     // Compose - 버전을 1.6.0으로 통일
     implementation("androidx.compose.ui:ui:1.6.0")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.0")

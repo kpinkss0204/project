@@ -13,24 +13,9 @@ import com.google.accompanist.pager.rememberPagerState
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppContent() {
-    var p1Location by remember { mutableStateOf(37.5665 to 126.9780) }
-    var inputKey by remember { mutableStateOf("") }
-    var p2ViewLocation by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    var generatedKey by remember { mutableStateOf("") }
-
     val pages: List<Pair<String, @Composable () -> Unit>> = listOf(
         "화폐/바코드 인식" to { CameraScreen() },
-        "위치 공유/암호" to {
-            LocationSharingWithCodeScreen(
-                locationState = p1Location,
-                inputKeyState = inputKey,
-                onInputChange = { inputKey = it },
-                p2LocationState = p2ViewLocation,
-                onLocationConfirmed = { p2ViewLocation = it },
-                generatedKeyState = generatedKey,
-                onGenerateKey = { generatedKey = it }
-            )
-        }
+        "위치 공유/암호" to { LocationSharingWithCodeScreen() }
     )
 
     val pagerState = rememberPagerState()
@@ -43,7 +28,7 @@ fun AppContent() {
             count = pages.size,
             state = pagerState,
             modifier = Modifier
-                .padding(paddingValues)   // ✅ Scaffold가 준 padding 적용
+                .padding(paddingValues)
                 .fillMaxSize()
         ) { pageIndex ->
             pages[pageIndex].second()
