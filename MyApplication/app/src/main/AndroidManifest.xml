@@ -5,21 +5,22 @@
     <!-- 위치 권한 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <!-- 카메라 권한 -->
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- 기타 권한 -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- 갤러리 접근을 위한 권한 (Android 13 이상) -->
+    <!-- 갤러리 접근 -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <!-- 갤러리 접근을 위한 권한 (Android 12 이하) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- 카메라 기능을 선택적(Optional)으로 사용한다고 명시 -->
+    <!-- 카메라 기능 optional -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
