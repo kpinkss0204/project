@@ -6,7 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.example.myapplication.features.CameraScreen
-import com.example.myapplication.ui.screens.LocationSharingWithCodeScreen
+import com.example.myapplication.features.LocationSharing.LocationSharingWithCodeScreen
 import com.google.accompanist.pager.HorizontalPager
 import com.google.accompanist.pager.rememberPagerState
 

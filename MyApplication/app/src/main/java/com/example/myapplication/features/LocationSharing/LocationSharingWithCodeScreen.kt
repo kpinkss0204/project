@@ -1,4 +1,4 @@
-package com.example.myapplication.ui.screens
+package com.example.myapplication.features.LocationSharing
 
 import android.Manifest
 import android.content.ClipData
