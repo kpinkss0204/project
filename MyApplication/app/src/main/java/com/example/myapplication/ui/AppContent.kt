@@ -18,8 +18,8 @@ import kotlinx.coroutines.launch
 fun AppContent() {
     // ✅ 세 개의 탭 구성
     val pages: List<Pair<String, @Composable () -> Unit>> = listOf(
-        "화폐/바코드 인식" to { CameraScreen() },
         "위치 공유/암호" to { LocationSharingWithCodeScreen() },
+        "화폐/바코드 인식" to { CameraScreen() },
         "웹페이지 보기" to { WebViewScreen("http://www.hsb.or.kr/") }
     )
 

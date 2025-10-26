@@ -3,12 +3,7 @@ package com.example.myapplication.features
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.ImageFormat
-import android.graphics.Matrix
-import android.graphics.Rect
-import android.graphics.YuvImage
+import android.graphics.*
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -30,6 +25,8 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.myapplication.model.C005Response
 import com.example.myapplication.network.RetrofitClient
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -40,6 +37,8 @@ import retrofit2.Response
 import java.io.ByteArrayOutputStream
 import java.util.*
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.min
 
 @SuppressLint("UnsafeOptInUsageError")
 @Composable
@@ -47,19 +46,20 @@ fun CameraScreen() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // ------------------- 상태 -------------------
+    // 상태
     var moneyResult by remember { mutableStateOf("화폐 인식 중...") }
     var barcodeResult by remember { mutableStateOf<String?>(null) }
     var productInfo by remember { mutableStateOf("스캔된 제품 정보를 기다리는 중...") }
-
     var isMoneyScanning by remember { mutableStateOf(true) }
     var isBarcodeScanning by remember { mutableStateOf(false) }
-
     var moneyRecognized by remember { mutableStateOf(false) }
     var barcodeRecognized by remember { mutableStateOf(false) }
-
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
     var yoloInitError by remember { mutableStateOf<String?>(null) }
+
+    // ✅ 추가: 화면 활성화 상태 추적
+    var isScreenActive by remember { mutableStateOf(true) }
+    val isProcessing = remember { AtomicBoolean(false) }
 
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     val previewView = remember { PreviewView(context) }
@@ -76,7 +76,29 @@ fun CameraScreen() {
         }
     }
 
-    // ------------------- TTS -------------------
+    // ✅ 생명주기 관찰자로 화면 전환 감지
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    isScreenActive = true
+                    Log.d("CameraScreen", "화면 활성화")
+                }
+                Lifecycle.Event.ON_PAUSE -> {
+                    isScreenActive = false
+                    isProcessing.set(false)
+                    Log.d("CameraScreen", "화면 비활성화")
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // TTS 초기화
     LaunchedEffect(Unit) {
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) tts?.language = Locale.KOREAN
@@ -85,9 +107,12 @@ fun CameraScreen() {
 
     DisposableEffect(Unit) {
         onDispose {
+            isScreenActive = false
+            isProcessing.set(false)
             tts?.shutdown()
             try {
                 yolov8?.close()
+                Log.d("CameraScreen", "YOLO 리소스 해제 완료")
             } catch (e: Exception) {
                 Log.e("CameraScreen", "YOLO 종료 오류: ${e.message}")
             }
@@ -96,6 +121,7 @@ fun CameraScreen() {
     }
 
     fun speakText(text: String) {
+        if (!isScreenActive) return
         tts?.let {
             if (it.isSpeaking) it.stop()
             it.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
@@ -103,9 +129,9 @@ fun CameraScreen() {
     }
 
     fun vibrateOnce(context: Context) {
+        if (!isScreenActive) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager =
-                context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             vibratorManager.defaultVibrator.vibrate(
                 VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE)
             )
@@ -119,7 +145,6 @@ fun CameraScreen() {
         }
     }
 
-    // 개선된 비트맵 변환 함수
     fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap? {
         return try {
             val image = imageProxy.image ?: return null
@@ -139,37 +164,25 @@ fun CameraScreen() {
             val yuvImage = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
             val out = ByteArrayOutputStream()
             yuvImage.compressToJpeg(Rect(0, 0, image.width, image.height), 85, out)
-            val imageBytes = out.toByteArray()
-            BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+            BitmapFactory.decodeByteArray(out.toByteArray(), 0, out.size())
         } catch (e: Exception) {
             Log.e("CameraScreen", "Bitmap 변환 오류: ${e.message}", e)
             null
         }
     }
 
-    // YOLO 입력용 비트맵 전처리 (640x640으로 리사이즈)
     fun preprocessBitmapForYolo(bitmap: Bitmap): Bitmap? {
         return try {
             val targetSize = 640
-            // 비율 유지하며 리사이즈
-            val scale = minOf(
-                targetSize.toFloat() / bitmap.width,
-                targetSize.toFloat() / bitmap.height
-            )
+            val scale = min(targetSize.toFloat() / bitmap.width, targetSize.toFloat() / bitmap.height)
             val scaledWidth = (bitmap.width * scale).toInt()
             val scaledHeight = (bitmap.height * scale).toInt()
 
             val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
-
-            // 정사각형 비트맵 생성 (패딩 추가)
             val outputBitmap = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
-            val canvas = android.graphics.Canvas(outputBitmap)
-            canvas.drawColor(android.graphics.Color.BLACK)
-
-            val left = (targetSize - scaledWidth) / 2f
-            val top = (targetSize - scaledHeight) / 2f
-            canvas.drawBitmap(scaledBitmap, left, top, null)
-
+            val canvas = Canvas(outputBitmap)
+            canvas.drawColor(Color.BLACK)
+            canvas.drawBitmap(scaledBitmap, (targetSize - scaledWidth)/2f, (targetSize - scaledHeight)/2f, null)
             scaledBitmap.recycle()
             outputBitmap
         } catch (e: Exception) {
@@ -178,15 +191,11 @@ fun CameraScreen() {
         }
     }
 
-    // ------------------- CameraX -------------------
+    // CameraX 바인딩
     DisposableEffect(Unit) {
-        val hasCameraPermission =
-            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                    android.content.pm.PackageManager.PERMISSION_GRANTED
-
-        if (!hasCameraPermission) {
-            return@DisposableEffect onDispose { }
-        }
+        val hasCameraPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!hasCameraPermission) return@DisposableEffect onDispose { }
 
         var cameraProviderInstance: ProcessCameraProvider? = null
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
@@ -197,111 +206,98 @@ fun CameraScreen() {
                 cameraProviderInstance = cameraProvider
                 cameraProvider.unbindAll()
 
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
-                }
+                val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
 
                 val analysisUseCase = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
 
-                val ANALYSIS_INTERVAL_MS = 1500L // 간격 증가
+                val ANALYSIS_INTERVAL_MS = 1500L
                 var lastAnalysisTime = 0L
                 val barcodeScanner = BarcodeScanning.getClient()
                 var lastDetectedBarcode: String? = null
                 var detectionCount = 0
                 val detectionThreshold = 3
                 val apiKey = "7798fd698f1f456a9988"
-                var isProcessing = false // 동시 처리 방지
 
                 analysisUseCase.setAnalyzer(cameraExecutor) { imageProxy ->
                     try {
+                        // ✅ 화면이 비활성 상태면 즉시 종료
+                        if (!isScreenActive) {
+                            imageProxy.close()
+                            return@setAnalyzer
+                        }
+
                         val currentTime = System.currentTimeMillis()
 
-                        // ------------------- 화폐 인식 -------------------
-                        if (isMoneyScanning && !moneyRecognized && !isProcessing &&
+                        // 화폐 인식
+                        if (isMoneyScanning && !moneyRecognized &&
                             currentTime - lastAnalysisTime >= ANALYSIS_INTERVAL_MS &&
-                            yolov8 != null) {
+                            yolov8 != null && isScreenActive) {
 
-                            isProcessing = true
+                            // ✅ AtomicBoolean로 동시 실행 방지
+                            if (!isProcessing.compareAndSet(false, true)) {
+                                imageProxy.close()
+                                return@setAnalyzer
+                            }
+
                             var originalBitmap: Bitmap? = null
                             var processedBitmap: Bitmap? = null
-
                             try {
+                                // ✅ 각 단계마다 화면 활성 상태 확인
+                                if (!isScreenActive) return@setAnalyzer
+
                                 originalBitmap = imageProxyToBitmap(imageProxy)
-                                if (originalBitmap == null) {
-                                    Log.e("CameraScreen", "비트맵 변환 실패")
-                                    return@setAnalyzer
-                                }
+                                if (originalBitmap == null || !isScreenActive) return@setAnalyzer
 
                                 processedBitmap = preprocessBitmapForYolo(originalBitmap)
-                                if (processedBitmap == null) {
-                                    Log.e("CameraScreen", "비트맵 전처리 실패")
-                                    return@setAnalyzer
-                                }
-
-                                Log.d("CameraScreen", "YOLO 추론 시작 (${processedBitmap.width}x${processedBitmap.height})")
+                                if (processedBitmap == null || !isScreenActive) return@setAnalyzer
 
                                 val detections = yolov8.detect(processedBitmap)
 
-                                Log.d("CameraScreen", "YOLO 추론 완료: ${detections.size}개 감지")
+                                // ✅ 추론 완료 후에도 화면 상태 확인
+                                if (!isScreenActive) return@setAnalyzer
 
                                 if (detections.isNotEmpty()) {
                                     val top = detections.maxByOrNull { it.confidence }
-                                    top?.let { detection ->
-                                        if (detection.confidence > 0.5f) {
-                                            val result = "${detection.className} (${(detection.confidence * 100).toInt()}%)"
-                                            moneyResult = result
-                                            speakText("${detection.className} 입니다")
-                                            vibrateOnce(context)
-                                            moneyRecognized = true
-                                        }
+                                    top?.takeIf { it.confidence > 0.5f }?.let { detection ->
+                                        moneyResult = "${detection.className} (${(detection.confidence*100).toInt()}%)"
+                                        speakText("${detection.className} 입니다")
+                                        vibrateOnce(context)
+                                        moneyRecognized = true
                                     }
                                 } else {
                                     moneyResult = "화폐를 인식할 수 없습니다"
                                 }
-
                                 lastAnalysisTime = currentTime
-
-                            } catch (e: OutOfMemoryError) {
-                                Log.e("CameraScreen", "메모리 부족: ${e.message}", e)
-                                moneyResult = "메모리 부족으로 인식에 실패했습니다"
                             } catch (e: Exception) {
-                                Log.e("CameraScreen", "YOLO 추론 오류: ${e.message}", e)
-                                moneyResult = "인식 오류: ${e.message}"
+                                Log.e("CameraScreen", "화폐 인식 오류: ${e.message}", e)
                             } finally {
-                                // 메모리 해제
-                                try {
-                                    processedBitmap?.recycle()
-                                    originalBitmap?.recycle()
-                                } catch (e: Exception) {
-                                    Log.e("CameraScreen", "비트맵 해제 오류: ${e.message}")
-                                }
-                                isProcessing = false
+                                try { originalBitmap?.recycle() } catch (_: Exception) {}
+                                try { processedBitmap?.recycle() } catch (_: Exception) {}
+                                isProcessing.set(false)
                             }
                         }
 
-                        // ------------------- 바코드 인식 -------------------
-                        if (isBarcodeScanning && !barcodeRecognized) {
+                        // 바코드 인식
+                        if (isBarcodeScanning && !barcodeRecognized && isScreenActive) {
                             val mediaImage = imageProxy.image
                             if (mediaImage != null) {
-                                val image = InputImage.fromMediaImage(
-                                    mediaImage,
-                                    imageProxy.imageInfo.rotationDegrees
-                                )
+                                val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
                                 barcodeScanner.process(image)
                                     .addOnSuccessListener { barcodes ->
+                                        if (!isScreenActive) return@addOnSuccessListener
+
                                         barcodes.firstOrNull()?.rawValue?.let { rawValue ->
                                             if (lastDetectedBarcode == rawValue) {
                                                 detectionCount++
-                                                if (detectionCount >= detectionThreshold &&
-                                                    barcodeResult != rawValue) {
+                                                if (detectionCount >= detectionThreshold && barcodeResult != rawValue) {
                                                     barcodeResult = rawValue
                                                     vibrateOnce(context)
                                                     speakText("바코드를 인식했습니다.")
                                                     barcodeRecognized = true
 
-                                                    // Retrofit API 호출
+                                                    // API 호출
                                                     RetrofitClient.instance.getProductByBarcode(
                                                         keyId = apiKey,
                                                         serviceId = "C005",
@@ -314,6 +310,7 @@ fun CameraScreen() {
                                                             call: Call<C005Response>,
                                                             response: Response<C005Response>
                                                         ) {
+                                                            if (!isScreenActive) return
                                                             val item = response.body()?.rows?.firstOrNull()
                                                             if (item != null) {
                                                                 productInfo = """
@@ -330,10 +327,8 @@ fun CameraScreen() {
                                                             }
                                                         }
 
-                                                        override fun onFailure(
-                                                            call: Call<C005Response>,
-                                                            t: Throwable
-                                                        ) {
+                                                        override fun onFailure(call: Call<C005Response>, t: Throwable) {
+                                                            if (!isScreenActive) return
                                                             productInfo = "API 호출 오류: ${t.localizedMessage}"
                                                             speakText(productInfo)
                                                         }
@@ -345,12 +340,8 @@ fun CameraScreen() {
                                             }
                                         }
                                     }
-                                    .addOnFailureListener {
-                                        Log.e("CameraScreen", "바코드 인식 실패", it)
-                                    }
-                                    .addOnCompleteListener {
-                                        imageProxy.close()
-                                    }
+                                    .addOnFailureListener { Log.e("CameraScreen", "바코드 인식 실패", it) }
+                                    .addOnCompleteListener { imageProxy.close() }
                                 return@setAnalyzer
                             }
                         }
@@ -363,12 +354,7 @@ fun CameraScreen() {
                 }
 
                 val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-                cameraProvider.bindToLifecycle(
-                    lifecycleOwner,
-                    cameraSelector,
-                    preview,
-                    analysisUseCase
-                )
+                cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, analysisUseCase)
                 Log.d("CameraScreen", "카메라 바인딩 완료")
             } catch (e: Exception) {
                 Log.e("CameraScreen", "카메라 초기화 실패: ${e.message}", e)
@@ -376,23 +362,22 @@ fun CameraScreen() {
         }, ContextCompat.getMainExecutor(context))
 
         onDispose {
+            isScreenActive = false
+            isProcessing.set(false)
             cameraProviderInstance?.unbindAll()
             Log.d("CameraScreen", "카메라 리소스 해제")
         }
     }
 
-    // ------------------- UI -------------------
+    // UI
     var totalDrag by remember { mutableStateOf(0f) }
-
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     detectVerticalDragGestures(
-                        onVerticalDrag = { _, dragAmount ->
-                            totalDrag += dragAmount
-                        },
+                        onVerticalDrag = { _, dragAmount -> totalDrag += dragAmount },
                         onDragEnd = {
                             if (totalDrag > 150f) {
                                 if (isMoneyScanning) {
@@ -417,16 +402,13 @@ fun CameraScreen() {
             factory = { previewView }
         )
 
-        // 에러 메시지 표시
         if (yoloInitError != null) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
                     .padding(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
             ) {
                 Text(
                     text = yoloInitError!!,
@@ -436,15 +418,12 @@ fun CameraScreen() {
             }
         }
 
-        // 결과 카드
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
