@@ -26,8 +26,8 @@ fun AppContent() {
 
     var dragOffsetX by remember { mutableStateOf(0f) }
 
-    // 스와이프 제스처로는 드로어 열리지 않도록 항상 false
-    val gesturesEnabled = false
+    // 스와이프 제스처는 WebView 화면에서 비활성화
+    val gesturesEnabled = currentScreen != Screen.WebView
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -52,29 +52,30 @@ fun AppContent() {
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(currentScreen) {
-                    detectHorizontalDragGestures { change, dragAmount ->
-                        dragOffsetX += dragAmount
+                    if (currentScreen != Screen.WebView) {
+                        detectHorizontalDragGestures { change, dragAmount ->
+                            dragOffsetX += dragAmount
 
-                        // 빈 페이지에서 왼쪽 스와이프 → CameraScreen
-                        if (dragOffsetX < -150f && currentScreen == Screen.EmptyPage) {
-                            currentScreen = null
-                            dragOffsetX = 0f
+                            // 빈 페이지에서 왼쪽 스와이프 → CameraScreen
+                            if (dragOffsetX < -150f && currentScreen == Screen.EmptyPage) {
+                                currentScreen = null
+                                dragOffsetX = 0f
+                            }
+
+                            // CameraScreen에서 오른쪽 스와이프 → EmptyPage
+                            if (dragOffsetX > 150f && currentScreen == null) {
+                                currentScreen = Screen.EmptyPage
+                                dragOffsetX = 0f
+                            }
+
+                            change.consume()
                         }
-
-                        // CameraScreen에서 오른쪽 스와이프 → EmptyPage
-                        if (dragOffsetX > 150f && currentScreen == null) {
-                            currentScreen = Screen.EmptyPage
-                            dragOffsetX = 0f
-                        }
-
-                        change.consume() // 다른 제스처에 영향 주지 않음
                     }
                 },
             topBar = {
                 TopAppBar(
                     title = { Text(currentScreen?.title ?: "화폐/바코드 인식") },
                     navigationIcon = {
-                        // 메뉴 버튼 클릭 시에만 드로어 열림
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(
                                 imageVector = Icons.Default.Menu,
@@ -93,7 +94,7 @@ fun AppContent() {
                 when (currentScreen) {
                     null -> CameraScreen()
                     Screen.LocationSharing -> LocationSharingWithCodeScreen()
-                    Screen.WebView -> WebViewScreen("http://www.hsb.or.kr/")
+                    Screen.WebView -> WebViewScreen("http://www.hsb.or.kr/", modifier = Modifier.fillMaxSize())
                     Screen.EmptyPage -> EmptyPageScreen()
                 }
             }
