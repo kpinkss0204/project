@@ -19,37 +19,32 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppContent() {
-    // 초기 화면을 EmptyPageScreen으로 설정
     var currentScreen by remember { mutableStateOf<Screen?>(Screen.EmptyPage) }
 
-    // 드로어 상태
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    // 스와이프용 임시 상태
     var dragOffsetX by remember { mutableStateOf(0f) }
 
-    // 메뉴는 빈 페이지에서만 보이도록
-    val gesturesEnabled = currentScreen == Screen.EmptyPage
+    // 스와이프 제스처로는 드로어 열리지 않도록 항상 false
+    val gesturesEnabled = false
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         gesturesEnabled = gesturesEnabled,
         drawerContent = {
-            if (gesturesEnabled) {
-                ModalDrawerSheet {
-                    NavigationDrawerContent(
-                        currentScreen = currentScreen,
-                        onScreenSelected = { screen ->
-                            currentScreen = screen
-                            scope.launch { drawerState.close() }
-                        },
-                        onBackToMain = {
-                            currentScreen = Screen.EmptyPage
-                            scope.launch { drawerState.close() }
-                        }
-                    )
-                }
+            ModalDrawerSheet {
+                NavigationDrawerContent(
+                    currentScreen = currentScreen,
+                    onScreenSelected = { screen ->
+                        currentScreen = screen
+                        scope.launch { drawerState.close() }
+                    },
+                    onBackToMain = {
+                        currentScreen = Screen.EmptyPage
+                        scope.launch { drawerState.close() }
+                    }
+                )
             }
         }
     ) {
@@ -71,21 +66,20 @@ fun AppContent() {
                             currentScreen = Screen.EmptyPage
                             dragOffsetX = 0f
                         }
+
+                        change.consume() // 다른 제스처에 영향 주지 않음
                     }
                 },
             topBar = {
                 TopAppBar(
                     title = { Text(currentScreen?.title ?: "화폐/바코드 인식") },
                     navigationIcon = {
-                        if (gesturesEnabled) {
-                            IconButton(onClick = {
-                                scope.launch { drawerState.open() }
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = "메뉴"
-                                )
-                            }
+                        // 메뉴 버튼 클릭 시에만 드로어 열림
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "메뉴"
+                            )
                         }
                     }
                 )
@@ -121,7 +115,6 @@ private fun NavigationDrawerContent(
 
     Divider()
 
-    // 메인 화면으로 돌아가기
     NavigationDrawerItem(
         icon = { Text("📄") },
         label = { Text("빈 페이지") },
@@ -130,7 +123,6 @@ private fun NavigationDrawerContent(
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
     )
 
-    // 메뉴 항목들
     Screen.values().forEach { screen ->
         if (screen != Screen.EmptyPage) {
             NavigationDrawerItem(
@@ -144,7 +136,6 @@ private fun NavigationDrawerContent(
     }
 }
 
-// 빈 페이지 화면
 @Composable
 fun EmptyPageScreen() {
     Box(
