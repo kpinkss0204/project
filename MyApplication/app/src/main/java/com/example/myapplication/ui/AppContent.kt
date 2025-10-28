@@ -14,6 +14,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.features.CameraScreen
 import com.example.myapplication.features.LocationSharing.LocationSharingWithCodeScreen
+import com.example.myapplication.features.ScheduleScreen
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,7 +27,6 @@ fun AppContent() {
 
     var dragOffsetX by remember { mutableStateOf(0f) }
 
-    // 스와이프 제스처는 WebView 화면에서 비활성화
     val gesturesEnabled = currentScreen != Screen.WebView
 
     ModalNavigationDrawer(
@@ -56,13 +56,11 @@ fun AppContent() {
                         detectHorizontalDragGestures { change, dragAmount ->
                             dragOffsetX += dragAmount
 
-                            // 빈 페이지에서 왼쪽 스와이프 → CameraScreen
                             if (dragOffsetX < -150f && currentScreen == Screen.EmptyPage) {
                                 currentScreen = null
                                 dragOffsetX = 0f
                             }
 
-                            // CameraScreen에서 오른쪽 스와이프 → EmptyPage
                             if (dragOffsetX > 150f && currentScreen == null) {
                                 currentScreen = Screen.EmptyPage
                                 dragOffsetX = 0f
@@ -96,6 +94,7 @@ fun AppContent() {
                     Screen.LocationSharing -> LocationSharingWithCodeScreen()
                     Screen.WebView -> WebViewScreen("http://www.hsb.or.kr/", modifier = Modifier.fillMaxSize())
                     Screen.EmptyPage -> EmptyPageScreen()
+                    Screen.Schedule -> ScheduleScreen()
                 }
             }
         }
@@ -150,5 +149,6 @@ fun EmptyPageScreen() {
 enum class Screen(val title: String, val icon: String) {
     LocationSharing("위치 공유", "📍"),
     WebView("웹뷰", "🌐"),
-    EmptyPage("빈 페이지", "📄")
+    EmptyPage("빈 페이지", "📄"),
+    Schedule("일정 만들기", "🗓️")
 }
