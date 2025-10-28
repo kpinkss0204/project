@@ -41,6 +41,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2")
     implementation("com.google.android.gms:play-services-location:21.1.0")
     implementation("com.google.firebase:firebase-database-ktx:20.3.1")
     implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
