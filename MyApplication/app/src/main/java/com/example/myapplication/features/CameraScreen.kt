@@ -58,6 +58,11 @@ fun CameraScreen() {
     val lastDetectedBarcode = remember { AtomicReference<String?>(null) }
     val detectionCount = remember { AtomicInteger(0) }
 
+    // 카메라 on/off 상태
+    var isCameraOn by remember { mutableStateOf(false) }
+    var tapCount by remember { mutableStateOf(0) }
+    var lastTapTime by remember { mutableStateOf(0L) }
+
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
 
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
@@ -140,7 +145,7 @@ fun CameraScreen() {
     }
 
     // ------------------- CameraX -------------------
-    LaunchedEffect(cameraProviderFuture) {
+    LaunchedEffect(cameraProviderFuture, isCameraOn) {
         val hasCameraPermission =
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
                     android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -149,6 +154,14 @@ fun CameraScreen() {
         cameraProviderFuture.addListener({
             try {
                 val cameraProvider = cameraProviderFuture.get()
+
+                if (!isCameraOn) {
+                    // 카메라 끄기
+                    cameraProvider.unbindAll()
+                    Log.d("CameraScreen", "카메라 언바인딩 완료")
+                    return@addListener
+                }
+
                 cameraProvider.unbindAll()
 
                 val preview = Preview.Builder().build().also {
@@ -286,6 +299,12 @@ fun CameraScreen() {
                             totalDrag += dragAmount
                         },
                         onDragEnd = {
+                            if (!isCameraOn) {
+                                // 카메라 꺼진 상태에서는 스와이프 무시
+                                totalDrag = 0f
+                                return@detectVerticalDragGestures
+                            }
+
                             if (totalDrag > 150f) {
                                 // 아래로 스와이프 -> 모드 전환
                                 isMoneyScanning = !isMoneyScanning
@@ -303,7 +322,6 @@ fun CameraScreen() {
                                 lastDetectedBarcode.set(null)
                                 detectionCount.set(0)
                                 productInfo = "스캔된 제품 정보를 기다리는 중..."
-
                             } else if (totalDrag < -150f) {
                                 // 위로 스와이프 -> 재인식
                                 if (isMoneyScanning) moneyRecognized = false
@@ -320,6 +338,50 @@ fun CameraScreen() {
                         },
                         onDragCancel = { totalDrag = 0f }
                     )
+                }
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            // DOWN 이벤트만 감지 (터치 시작)
+                            event.changes.forEach { change ->
+                                if (change.pressed && change.previousPressed.not()) {
+                                    val currentTime = System.currentTimeMillis()
+
+                                    // 1초 이내의 탭만 카운트
+                                    if (currentTime - lastTapTime <= 1000) {
+                                        tapCount++
+                                    } else {
+                                        tapCount = 1
+                                    }
+                                    lastTapTime = currentTime
+
+                                    // 2번 탭: 카메라 켜기
+                                    if (tapCount == 2 && !isCameraOn) {
+                                        isCameraOn = true
+                                        speakText("카메라를 켭니다")
+                                        tapCount = 0
+                                    }
+                                    // 3번 탭: 카메라 끄기
+                                    else if (tapCount == 3 && isCameraOn) {
+                                        isCameraOn = false
+                                        speakText("카메라를 끕니다")
+                                        tapCount = 0
+                                        // 상태 초기화
+                                        moneyRecognized = false
+                                        barcodeRecognized = false
+                                        barcodeResult = null
+                                        lastDetectedBarcode.set(null)
+                                        detectionCount.set(0)
+                                        productInfo = "스캔된 제품 정보를 기다리는 중..."
+                                        moneyResult = "화폐 인식 중..."
+                                    }
+
+                                    change.consume()
+                                }
+                            }
+                        }
+                    }
                 },
             factory = { previewView }
         )
@@ -334,7 +396,9 @@ fun CameraScreen() {
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                if (isMoneyScanning) {
+                if (!isCameraOn) {
+                    Text("카메라가 꺼져 있습니다. 2번 탭하여 켜주세요.", style = MaterialTheme.typography.bodyLarge)
+                } else if (isMoneyScanning) {
                     Text(moneyResult, style = MaterialTheme.typography.bodyLarge)
                 } else {
                     productInfo.split("\n").forEach { line ->
