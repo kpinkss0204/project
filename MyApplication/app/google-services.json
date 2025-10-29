@@ -1,13 +1,14 @@
 {
   "project_info": {
-    "project_number": "696264598875",
-    "project_id": "location-sharing-bc81f",
-    "storage_bucket": "location-sharing-bc81f.firebasestorage.app"
+    "project_number": "330317246235",
+    "firebase_url": "https://location-5bb26-default-rtdb.firebaseio.com",
+    "project_id": "location-5bb26",
+    "storage_bucket": "location-5bb26.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:696264598875:android:2c1350d2e432c5f705267e",
+        "mobilesdk_app_id": "1:330317246235:android:ae170f03115e355501edbe",
         "android_client_info": {
           "package_name": "com.example.myapplication"
         }
@@ -15,7 +16,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAMhjeKPMrkd5xp2uZpoB6SKfMcq6yofuk"
+          "current_key": "AIzaSyDwCeTR7KNHWbgT9Gc6nsnn2YXywn5VRtA"
         }
       ],
       "services": {
