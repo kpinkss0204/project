@@ -14,8 +14,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.features.CameraScreen
 import com.example.myapplication.features.LocationSharing.LocationSharingWithCodeScreen
-import com.example.myapplication.features.ScheduleSharing.ScheduleSendScreen  // ⭐ 변경
-import com.example.myapplication.features.ScheduleSharing.ScheduleListScreen  // ⭐ 추가
+import com.example.myapplication.features.ScheduleSharing.ScheduleSendScreen
+import com.example.myapplication.features.ScheduleSharing.ScheduleListScreen
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,13 +57,27 @@ fun AppContent() {
                         detectHorizontalDragGestures { change, dragAmount ->
                             dragOffsetX += dragAmount
 
+                            // 빈 페이지에서 왼쪽 스와이프 → 화폐/바코드 인식
                             if (dragOffsetX < -150f && currentScreen == Screen.EmptyPage) {
                                 currentScreen = null
                                 dragOffsetX = 0f
                             }
 
+                            // 화폐/바코드 인식에서 오른쪽 스와이프 → 빈 페이지
                             if (dragOffsetX > 150f && currentScreen == null) {
                                 currentScreen = Screen.EmptyPage
+                                dragOffsetX = 0f
+                            }
+
+                            // 화폐/바코드 인식에서 왼쪽 스와이프 → 일정 목록
+                            if (dragOffsetX < -150f && currentScreen == null) {
+                                currentScreen = Screen.ScheduleList
+                                dragOffsetX = 0f
+                            }
+
+                            // 일정 목록에서 오른쪽 스와이프 → 화폐/바코드 인식
+                            if (dragOffsetX > 150f && currentScreen == Screen.ScheduleList) {
+                                currentScreen = null
                                 dragOffsetX = 0f
                             }
 
@@ -95,8 +109,8 @@ fun AppContent() {
                     Screen.LocationSharing -> LocationSharingWithCodeScreen()
                     Screen.WebView -> WebViewScreen("http://www.hsb.or.kr/", modifier = Modifier.fillMaxSize())
                     Screen.EmptyPage -> EmptyPageScreen()
-                    Screen.ScheduleSend -> ScheduleSendScreen()  // ⭐ 일정 보내기
-                    Screen.ScheduleList -> ScheduleListScreen()  // ⭐ 일정 목록
+                    Screen.ScheduleSend -> ScheduleSendScreen()
+                    Screen.ScheduleList -> ScheduleListScreen()  // 스와이프로 접근
                 }
             }
         }
@@ -125,8 +139,9 @@ private fun NavigationDrawerContent(
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
     )
 
+    // 메뉴에 표시할 화면만 필터링 (ScheduleList 제외)
     Screen.values().forEach { screen ->
-        if (screen != Screen.EmptyPage) {
+        if (screen != Screen.EmptyPage && screen != Screen.ScheduleList) {
             NavigationDrawerItem(
                 icon = { Text(screen.icon) },
                 label = { Text(screen.title) },
@@ -148,11 +163,10 @@ fun EmptyPageScreen() {
     }
 }
 
-// ⭐ Screen enum 수정
 enum class Screen(val title: String, val icon: String) {
     LocationSharing("위치 공유", "📍"),
     WebView("웹뷰", "🌐"),
     EmptyPage("빈 페이지", "📄"),
-    ScheduleSend("일정 보내기", "📤"),  // ⭐ 추가
-    ScheduleList("일정 목록", "📥")      // ⭐ 추가
+    ScheduleSend("일정 보내기", "📤"),
+    ScheduleList("일정 목록", "📥")  // 메뉴에는 표시 안 됨, 스와이프로만 접근
 }
