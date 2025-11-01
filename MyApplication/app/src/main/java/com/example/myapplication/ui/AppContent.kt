@@ -13,8 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.features.CameraScreen
-import com.example.myapplication.features.LocationSharing.LocationSharingWithCodeScreen
-import com.example.myapplication.features.ScheduleSharing.ScheduleSharingScreen  // ✅ 추가
+import com.example.myapplication.features.ScheduleSharing.ScheduleSendScreen  // ⭐ 변경
+import com.example.myapplication.features.ScheduleSharing.ScheduleListScreen  // ⭐ 추가
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,7 +94,8 @@ fun AppContent() {
                     Screen.LocationSharing -> LocationSharingWithCodeScreen()
                     Screen.WebView -> WebViewScreen("http://www.hsb.or.kr/", modifier = Modifier.fillMaxSize())
                     Screen.EmptyPage -> EmptyPageScreen()
-                    Screen.Schedule -> ScheduleSharingScreen()  // ✅ 수정
+                    Screen.ScheduleSend -> ScheduleSendScreen()  // ⭐ 일정 보내기
+                    Screen.ScheduleList -> ScheduleListScreen()  // ⭐ 일정 목록
                 }
             }
         }
@@ -113,7 +114,7 @@ private fun NavigationDrawerContent(
         modifier = Modifier.padding(16.dp)
     )
 
-    HorizontalDivider()  // Divider() 대신 HorizontalDivider() 사용
+    HorizontalDivider()
 
     NavigationDrawerItem(
         icon = { Text("📄") },
@@ -146,9 +147,11 @@ fun EmptyPageScreen() {
     }
 }
 
+// ⭐ Screen enum 수정
 enum class Screen(val title: String, val icon: String) {
     LocationSharing("위치 공유", "📍"),
     WebView("웹뷰", "🌐"),
     EmptyPage("빈 페이지", "📄"),
-    Schedule("일정 공유", "📅")
+    ScheduleSend("일정 보내기", "📤"),  // ⭐ 추가
+    ScheduleList("일정 목록", "📥")      // ⭐ 추가
 }
