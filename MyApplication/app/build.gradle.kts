@@ -43,14 +43,18 @@ android {
 dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2")
     implementation("com.google.android.gms:play-services-location:21.1.0")
-    implementation("com.google.firebase:firebase-database-ktx:21.0.0")
-    implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
-    implementation("com.google.firebase:firebase-database")
-    implementation("com.google.firebase:firebase-analytics")
+
+    // Firebase BoM (모든 Firebase 라이브러리 버전 관리)
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+
+    // Firebase 라이브러리들 (BoM으로 버전 자동 관리)
+    implementation("com.google.firebase:firebase-database-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-analytics-ktx")
 
     implementation("com.kakao.maps.open:android:2.12.18")
 
-    // Compose - 버전을 1.6.0으로 통일
+    // Compose
     implementation("androidx.compose.ui:ui:1.6.0")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.0")
     implementation("androidx.compose.material3:material3:1.3.1")
@@ -67,7 +71,7 @@ dependencies {
     implementation("androidx.camera:camera-view:1.3.1")
     implementation("androidx.camera:camera-extensions:1.3.1")
 
-    // ONNX / PyTorch (AI 모델 실행용)
+    // ONNX / PyTorch
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.18.0")
     implementation("org.pytorch:pytorch_android_lite:1.12.2")
     implementation("org.pytorch:pytorch_android_torchvision_lite:1.12.2")
@@ -81,11 +85,12 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-simplexml:2.9.0")
 
-    // ML Kit Barcode Scanning (필요시)
+    // ML Kit Barcode Scanning
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1")
+    implementation(libs.firebase.firestore)
 
     // Testing
     testImplementation("junit:junit:4.13.2")

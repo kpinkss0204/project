@@ -20,6 +20,8 @@ import androidx.lifecycle.*
 import com.example.myapplication.ui.components.KakaoMapViewCompose
 import com.google.android.gms.location.*
 import com.google.firebase.database.*
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.Timestamp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -30,6 +32,7 @@ fun LocationSharingWithCodeScreen(
 ) {
     val context = LocalContext.current
     val database = FirebaseDatabase.getInstance().reference.child("shared_locations")
+    val firestore = FirebaseFirestore.getInstance()
     val sharedPreferences = remember {
         context.getSharedPreferences("location_sharing_prefs", Context.MODE_PRIVATE)
     }
@@ -53,25 +56,37 @@ fun LocationSharingWithCodeScreen(
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // 위치 권한 확인
+    // 최초 암호 생성 및 Firestore에 저장
     LaunchedEffect(Unit) {
-        val hasFineLocation = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val hasCoarseLocation = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        hasLocationPermission = hasFineLocation || hasCoarseLocation
+        if (generatedKey.isEmpty()) {
+            // 특수문자 포함 암호 생성
+            val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#\$%^&*()-_=+"
+            val newKey = (1..12).map { chars.random() }.joinToString("")
+            generatedKey = newKey
+            sharedPreferences.edit().putString("generated_key", newKey).apply()
 
-        if (!hasLocationPermission) {
-            locationPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
+            // SHA-256 해시를 사용하여 안전한 문서 ID 생성
+            val messageDigest = java.security.MessageDigest.getInstance("SHA-256")
+            val hashBytes = messageDigest.digest(newKey.toByteArray())
+            val docId = hashBytes.joinToString("") { "%02x".format(it) }.take(32)
+
+            // Firestore에 저장 (문서 ID는 해시값, 내부에 원본 코드 저장)
+            val data = hashMapOf(
+                "originalCode" to newKey,  // 원본 특수문자 포함 코드
+                "docId" to docId,           // 해시된 문서 ID
+                "createdAt" to Timestamp.now()
             )
+            firestore.collection("location_keys")
+                .document(docId)
+                .set(data)
+                .addOnSuccessListener {
+                    android.util.Log.d("LocationSharing", "✅ 저장 성공 - 원본: $newKey, 문서ID: $docId")
+                    Toast.makeText(context, "내 암호코드가 생성되었습니다: $newKey", Toast.LENGTH_SHORT).show()
+                }
+                .addOnFailureListener { exception ->
+                    android.util.Log.e("LocationSharing", "❌ 저장 실패", exception)
+                    Toast.makeText(context, "암호코드 저장 실패: ${exception.message}", Toast.LENGTH_SHORT).show()
+                }
         }
     }
 
@@ -112,17 +127,6 @@ fun LocationSharingWithCodeScreen(
             Toast.makeText(context, "위치 권한 오류: ${e.message}", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(context, "위치 업데이트 오류: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    // 최초 암호 생성
-    LaunchedEffect(Unit) {
-        if (generatedKey.isEmpty()) {
-            val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#\$%^&*()-_=+"
-            val newKey = (1..12).map { chars.random() }.joinToString("")
-            generatedKey = newKey
-            sharedPreferences.edit().putString("generated_key", newKey).apply()
-            Toast.makeText(context, "내 암호코드가 자동 생성되었습니다: $newKey", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -246,6 +250,7 @@ fun LocationSharingWithCodeScreen(
                     if (generatedKey.isNotEmpty()) {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("암호코드", generatedKey))
+                        Toast.makeText(context, "클립보드에 복사되었습니다", Toast.LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -254,7 +259,7 @@ fun LocationSharingWithCodeScreen(
             }
         }
 
-        item { Divider() }
+        item { HorizontalDivider() }
 
         item {
             OutlinedTextField(
@@ -314,7 +319,7 @@ fun LocationSharingWithCodeScreen(
 
         // 상대방 위치 지도 표시
         if (partnerKeyToWatch != null && partnerLocation != null) {
-            item { Divider() }
+            item { HorizontalDivider() }
             item { Text("👥 상대방 위치 추적 중", style = MaterialTheme.typography.titleSmall) }
             item { Text("위도: ${partnerLocation!!.first}, 경도: ${partnerLocation!!.second}") }
             item {
