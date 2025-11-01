@@ -41,7 +41,10 @@ android {
 }
 
 dependencies {
+    // Lifecycle & Compose
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2")
+
+    // Google Location Services
     implementation("com.google.android.gms:play-services-location:21.1.0")
 
     // Firebase BoM (모든 Firebase 라이브러리 버전 관리)
@@ -52,6 +55,7 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-analytics-ktx")
 
+    // Kakao Map
     implementation("com.kakao.maps.open:android:2.12.18")
 
     // Compose
@@ -90,6 +94,7 @@ dependencies {
 
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1")
+
     implementation(libs.firebase.firestore)
 
     // Testing
