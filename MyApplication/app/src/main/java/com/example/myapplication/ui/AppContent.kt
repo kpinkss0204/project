@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.features.CameraScreen
+import com.example.myapplication.features.LocationSharing.LocationSharingWithCodeScreen
 import com.example.myapplication.features.ScheduleSharing.ScheduleSendScreen  // ⭐ 변경
 import com.example.myapplication.features.ScheduleSharing.ScheduleListScreen  // ⭐ 추가
 import kotlinx.coroutines.launch
